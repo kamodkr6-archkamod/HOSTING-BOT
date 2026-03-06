@@ -132,7 +132,9 @@ class BotEngine:
             return f"❌ File `{main_file}` missing!"
             
         log_file = open(os.path.join(container_dir, "logs.txt"), "a")
-        
+        req = os.path.join(container_dir, "requirements.txt")      
+        if os.path.exists(req):
+            subprocess.run([sys.executable, "-m", "pip", "install", "-r", req], cwd=container_dir)
         try:
             proc = subprocess.Popen(
                 [sys.executable, main_file],
@@ -258,12 +260,28 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         
         text = f"🤖 **Bot:** {row[1]}\n📊 **Status:** {row[2].upper()}"
+        
         buttons = [
-            [InlineKeyboardButton("▶️ Run", callback_data=f"run_{cid}"), InlineKeyboardButton("⏹ Stop", callback_data=f"stop_{cid}")],
-            [InlineKeyboardButton("🗑 Delete", callback_data=f"del_{cid}")],
-            [InlineKeyboardButton("🔙 Back", callback_data="back_list")]
+            [
+                InlineKeyboardButton("▶️ Run", callback_data=f"run_{cid}"),
+                InlineKeyboardButton("⏹ Stop", callback_data=f"stop_{cid}")
+            ],
+            [
+                InlineKeyboardButton("📜 Logs", callback_data=f"log_{cid}")
+            ],
+            [
+                InlineKeyboardButton("🗑 Delete", callback_data=f"del_{cid}")
+            ],
+            [
+                InlineKeyboardButton("🔙 Back", callback_data="back_list")
+            ]
         ]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
+
+        await query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode="Markdown"
+        )
 
     elif action == "run":
         res = engine.run_bot(cid)
@@ -272,19 +290,24 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif action == "stop":
         res = engine.stop_bot(cid)
         await query.message.reply_text(res, parse_mode="Markdown")
-        
-    # NEW: Direct Stop from "Stop Instance" menu
+
+    elif action == "log":
+        logs = engine.get_logs(cid)
+        await query.message.reply_text(
+            f"📜 Bot Logs:\n\n```\n{logs}\n```",
+            parse_mode="Markdown"
+        )
+
     elif action == "stopdirect":
         res = engine.stop_bot(cid)
         await query.message.reply_text(res, parse_mode="Markdown")
-        # Refresh the list to remove the stopped bot
         await stop_instance_menu(query, context)
 
     elif action == "del":
         res = engine.delete_bot(cid)
         await query.message.reply_text(res, parse_mode="Markdown")
         await deploy_console(query, context)
-        
+
     elif data == "back_list":
         await deploy_console(query, context)
 
