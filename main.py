@@ -293,9 +293,59 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    action, cid = query.data.split("_", 1)
+    data = query.data
 
-    if action == "run":
+    # BACK BUTTON
+    if data == "back":
+        bots = engine.db.get_all_containers()
+
+        keyboard = []
+        for bot in bots:
+            status = "🟢" if bot[2] == "running" else "🔴"
+            keyboard.append(
+                [InlineKeyboardButton(f"{status} {bot[1]}", callback_data=f"menu_{bot[0]}")]
+            )
+
+        await query.edit_message_text(
+            "🚀 **Deploy Console**",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown",
+        )
+        return
+
+    action, cid = data.split("_", 1)
+
+    # MENU (SHOW RUN / STOP / LOGS)
+    if action == "menu":
+        row = engine.db.get_container(cid)
+
+        if not row:
+            await query.message.reply_text("❌ Bot not found.")
+            return
+
+        cid, name, status, main_file, pid = row
+
+        keyboard = [
+            [
+                InlineKeyboardButton("▶️ RUN", callback_data=f"run_{cid}"),
+                InlineKeyboardButton("🛑 STOP", callback_data=f"stop_{cid}")
+            ],
+            [
+                InlineKeyboardButton("📜 LOGS", callback_data=f"log_{cid}"),
+                InlineKeyboardButton("🗑 DELETE", callback_data=f"del_{cid}")
+            ],
+            [
+                InlineKeyboardButton("⬅️ BACK", callback_data="back")
+            ]
+        ]
+
+        await query.edit_message_text(
+            f"⚙️ **Manage Bot:** `{name}`\nStatus: `{status}`",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
+
+    elif action == "run":
         res = engine.run_bot(cid)
         await query.message.reply_text(res, parse_mode="Markdown")
 
