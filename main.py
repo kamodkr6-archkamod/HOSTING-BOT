@@ -132,9 +132,9 @@ class BotEngine:
             return f"❌ File `{main_file}` missing!"
             
         log_file = open(os.path.join(container_dir, "logs.txt"), "a")
-        req = os.path.join(container_dir, "requirements.txt")      
+        req = os.path.join(container_dir, "requirements.txt")
         if os.path.exists(req):
-            subprocess.run([sys.executable, "-m", "pip", "install", "-r", req], cwd=container_dir)
+            subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], cwd=container_dir)
         try:
             proc = subprocess.Popen(
                 [sys.executable, main_file],
