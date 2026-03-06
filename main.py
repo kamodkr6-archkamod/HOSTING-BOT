@@ -98,12 +98,13 @@ class BotEngine:
                 os.remove(target_path) 
                 
                 # Find main python file
-                files = os.listdir(container_dir)
-                main_file = "bot.py"
-                for f in files:
-                    if f.endswith(".py"):
-                        main_file = f
-                        break
+                main_file = "main.py"
+                if not
+                os.path.exists(os.path.join(container_dir, main_file)):
+                    for f in os.listdir(container_dir):
+                        if f.endswith(".py"):
+                            main_file = f
+                            break
                 
                 self.db.update_main_file(container_id, main_file)
                 msg += "📦 **ZIP Extracted!**\n"
