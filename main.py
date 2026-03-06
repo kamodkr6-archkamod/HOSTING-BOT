@@ -75,109 +75,130 @@ class Database:
             shutil.rmtree(path)
 
 # ==================== BOT ENGINE ====================
+
 class BotEngine:
+
     def __init__(self):
         self.db = Database()
         self.processes = {}
-    
+
     def handle_upload(self, file_path, file_name):
         name_clean = file_name.rsplit('.', 1)[0]
         ext = file_name.rsplit('.', 1)[-1].lower()
-        
+
         container_id = self.db.create_container(name_clean)
         container_dir = os.path.join(Config.CONTAINERS_DIR, container_id)
         target_path = os.path.join(container_dir, file_name)
+
         shutil.move(file_path, target_path)
-        
+
         msg = f"✅ **Container Created:** `{name_clean}`\n"
-        
-        if ext == 'zip':
+
+        if ext == "zip":
             try:
-                with zipfile.ZipFile(target_path, 'r') as zip_ref:
+                with zipfile.ZipFile(target_path, "r") as zip_ref:
                     zip_ref.extractall(container_dir)
-                os.remove(target_path) 
-                
-                # Find main python file
+
+                os.remove(target_path)
+
                 main_file = "main.py"
-                if not
-                os.path.exists(os.path.join(container_dir, main_file)):
+
+                if not os.path.exists(os.path.join(container_dir, main_file)):
                     for f in os.listdir(container_dir):
                         if f.endswith(".py"):
                             main_file = f
                             break
-                
+
                 self.db.update_main_file(container_id, main_file)
+
                 msg += "📦 **ZIP Extracted!**\n"
                 msg += f"🐍 **Main File set to:** `{main_file}`"
+
             except Exception as e:
                 msg += f"❌ **Zip Error:** {str(e)}"
-        elif ext == 'py':
+
+        elif ext == "py":
             self.db.update_main_file(container_id, file_name)
             msg += f"🐍 **Script Uploaded:** `{file_name}`"
 
         return msg
 
-    def run_bot(self, container_id):
-        row = self.db.get_container(container_id)
-        if not row: return "❌ Bot not found."
-        
-        cid, name, status, main_file, old_pid = row
-        
-        if status == 'running':
-            return "⚠️ Bot is already running!"
-            
-        container_dir = os.path.join(Config.CONTAINERS_DIR, cid)
-        main_path = os.path.join(container_dir, main_file)
-        
-        if not os.path.exists(main_path):
-            return f"❌ File `{main_file}` missing!"
-            
-        log_file = open(os.path.join(container_dir, "logs.txt"), "a")
-        req = os.path.join(container_dir, "requirements.txt")
-        if os.path.exists(req):
-            subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], cwd=container_dir)
+def run_bot(self, container_id):
+    row = self.db.get_container(container_id)
+    if not row:
+        return "❌ Bot not found."
+
+    cid, name, status, main_file, old_pid = row
+
+    if status == "running":
+        return "⚠️ Bot is already running!"
+
+    container_dir = os.path.join(Config.CONTAINERS_DIR, cid)
+    main_path = os.path.join(container_dir, main_file)
+
+    if not os.path.exists(main_path):
+        return f"❌ File `{main_file}` missing!"
+
+    # live logs
+    log_file = open(os.path.join(container_dir, "logs.txt"), "a", buffering=1)
+
+    req = os.path.join(container_dir, "requirements.txt")
+    if os.path.exists(req):
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"],
+            cwd=container_dir
+        )
+
+    try:
+        proc = subprocess.Popen(
+            [sys.executable, main_file],
+            cwd=container_dir,
+            stdout=log_file,
+            stderr=subprocess.STDOUT
+        )
+
+        self.processes[cid] = proc
+        self.db.update_status(cid, "running", proc.pid)
+
+        return f"✅ **Started:** `{name}` (PID: {proc.pid})"
+
+    except Exception as e:
+        return f"❌ **Fail:** {str(e)}"
+
+def stop_bot(self, container_id):
+    row = self.db.get_container(container_id)
+    if not row:
+        return "Bot not found"
+
+    cid, name, status, main_file, pid = row
+
+    if cid in self.processes:
+        self.processes[cid].terminate()
+        del self.processes[cid]
+
+    elif pid:
         try:
-            proc = subprocess.Popen(
-                [sys.executable, main_file],
-                cwd=container_dir,
-                stdout=log_file,
-                stderr=subprocess.STDOUT
-            )
-            self.processes[cid] = proc
-            self.db.update_status(cid, 'running', proc.pid)
-            return f"✅ **Started:** `{name}` (PID: {proc.pid})"
-        except Exception as e:
-            return f"❌ **Fail:** {str(e)}"
+            os.kill(pid, signal.SIGTERM)
+        except:
+            pass
 
-    def stop_bot(self, container_id):
-        row = self.db.get_container(container_id)
-        if not row: return "Bot not found"
-        cid, name, status, main_file, pid = row
-        
-        if cid in self.processes:
-            self.processes[cid].terminate()
-            del self.processes[cid]
-        elif pid:
-            try:
-                os.kill(pid, signal.SIGTERM)
-            except:
-                pass
-            
-        self.db.update_status(cid, 'stopped', None)
-        return f"🛑 **Stopped:** `{name}`"
+    self.db.update_status(cid, "stopped", None)
+    return f"🛑 **Stopped:** `{name}`"
 
-    def delete_bot(self, container_id):
-        self.stop_bot(container_id)
-        self.db.delete_container(container_id)
-        return "🗑 **Deleted Successfully.**"
+def delete_bot(self, container_id):
+    self.stop_bot(container_id)
+    self.db.delete_container(container_id)
+    return "🗑 **Deleted Successfully.**"
 
-    def get_logs(self, container_id):
-        log_path = os.path.join(Config.CONTAINERS_DIR, container_id, "logs.txt")
-        if os.path.exists(log_path):
-            with open(log_path, 'r') as f:
-                lines = f.readlines()
-                return "".join(lines[-15:]) 
-        return "📭 Log file is empty."
+def get_logs(self, container_id):
+    log_path = os.path.join(Config.CONTAINERS_DIR, container_id, "logs.txt")
+
+    if os.path.exists(log_path):
+        with open(log_path, "r") as f:
+            lines = f.readlines()
+            return "".join(lines[-20:])
+
+    return "📭 Log file is empty."
 
 engine = BotEngine()
 
